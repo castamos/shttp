@@ -10,7 +10,7 @@ use std::net::TcpStream;
 use clap::Parser;
 use ctrlc;
 
-use hello_http::ServerConfig;
+use shttp::ServerConfig;
 
 
 const RESOURCE_DIR : &str = "../res";
@@ -69,7 +69,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let enabled_til_ctrlc = set_ctrlc_finalizer(&config);
 
     // Run the server
-    hello_http::run(enabled_til_ctrlc, config, move |request|{
+    shttp::run(enabled_til_ctrlc, config, move |request|{
         process_request(request, &app_config, Arc::clone(&app_state))
     })?;
 
@@ -104,14 +104,14 @@ fn set_ctrlc_finalizer(config: &ServerConfig) -> Arc<AtomicBool> {
 }
 
 
-use hello_http::http;
+use shttp::http;
 
 /// This is the router
 fn process_request(
     header: &http::Request, app_config: &AppConfig, app_state: Arc<RwLock<AppState>>)
     -> Result<http::Response, Box<dyn Error>>
 {
-    use hello_http::http:: {
+    use shttp::http:: {
         req::Method::*,
         Response,
         res::Status,
