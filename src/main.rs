@@ -4,22 +4,21 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::net::TcpStream;
 
 use clap::Parser;
-use ctrlc;
 
-use shttp::ServerConfig;
+use shttp::{ServerConfig, http};
 
-
+/// Path for server html files, relative to the executable.
 const RESOURCE_DIR : &str = "../res";
+
 
 /// Fixed configuration for the web app.
 struct AppConfig<'a> {
     name: &'a str,
     version: &'a str,
 }
+
 
 /// Dynamic application state.
 struct AppState {
@@ -41,10 +40,10 @@ fn main() {
 }
 
 
-/// Load configuration and runs the server.
+/// Loads configuration and runs the server.
 fn run() -> Result<(), Box<dyn Error>> {
 
-    // Determine static configuration
+    // Determine static configuration:
     let res_dir = exe_relative_dir(Path::new(RESOURCE_DIR)).or_else(
         |e| Err( format!("Unable to locate application resource files: {:?}", e))
     )?;
@@ -52,21 +51,23 @@ fn run() -> Result<(), Box<dyn Error>> {
     // Build dynamic config from command-line and default values:
     let mut config = ServerConfig::parse();
 
-    // Merge static and dynamic configuration
+    // Merge static and dynamic configuration:
     println!("Resource dir: {:?}", res_dir);
     config.resource_dir = res_dir;
-
     
+    // Initialize application-specific fixed configuration:
     let app_config = AppConfig {
         name: "My Web App",
         version: "0.1",
     };
 
+    // Initialize application-specific shared state:
     let app_state = Arc::new(RwLock::new(AppState {
         req_cnt: 0,
     }));
 
-    let enabled_til_ctrlc = set_ctrlc_finalizer(&config);
+    // Configure server finalization via Ctrl-C
+    let enabled_til_ctrlc = shttp::set_ctrlc_finalizer(&config);
 
     // Run the server
     shttp::run(enabled_til_ctrlc, config, move |request|{
@@ -77,36 +78,8 @@ fn run() -> Result<(), Box<dyn Error>> {
 }
 
 
-fn set_ctrlc_finalizer(config: &ServerConfig) -> Arc<AtomicBool> {
-
-    // Will run the server until this value becomes `false`:
-    let is_server_enabled = Arc::new( AtomicBool::new(true) );
-    let enabled = Arc::clone(&is_server_enabled);
-
-    let self_address = format!("{}:{}", config.interface_address, config.port);
-
-    // Set handler for the TERM signal to shutdown the server:
-    ctrlc::set_handler(move ||
-    {
-        println!(" TERM signal (Ctrl-C) received, will shut server down ...");
-
-        // Flag the server as disabled:
-        enabled.store(false, Ordering::Relaxed);
-
-        // Create a dummy connection to the server to ensure the socket gets unblocked:
-        let _ = TcpStream::connect(&self_address);
-    }
-    ).unwrap_or_else(|err| {
-        eprintln!("WARN: Failed to set handler for TERM signal (Ctrl-C): {err}");
-    });
-
-    is_server_enabled
-}
-
-
-use shttp::http;
-
-/// This is the router
+/// The HTTP endpoint router. This is called from each request the server receives
+/// and may be called from different threads each time.
 fn process_request(
     header: &http::Request, app_config: &AppConfig, app_state: Arc<RwLock<AppState>>)
     -> Result<http::Response, Box<dyn Error>>

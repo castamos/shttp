@@ -8,6 +8,7 @@ use std::{
 };
 
 use clap::Parser;
+use ctrlc;
 
 mod thread_pool;
 use crate::thread_pool::ThreadPool;
@@ -38,6 +39,15 @@ pub struct ServerConfig {
 }
 
 
+/// Executes the HTTP server and keeps it running until the shared boolean flag `enabled` is changed (externally
+/// from other thread) to `false`, at which point the next connection attempt makes this function return.
+/// (Therefore a dummy connection is required to signal the server finalization.)
+///
+/// All requests are processed by the given `router` closure. The parsed `Request` is passed to it,
+/// and the `Response` it returns is used as the server response for that specific request.
+///
+/// All network and runtime configuration is passed in `config`.
+///
 pub fn run<F>(enabled: Arc<AtomicBool>, config: ServerConfig, router: F) -> Result<(), Box<dyn Error>>
 where
     F: Fn(&http::Request) -> Result<http::Response, Box<dyn Error>> + Send + 'static + Sync
@@ -52,7 +62,7 @@ where
     let shared_router = Arc::new(router);
 
     for stream_result in listener.incoming() {
-        if !enabled.load(Ordering::Relaxed) {
+        if !enabled.load(Ordering::Acquire) {
             break;
         }
         let stream = stream_result.or_else(|e| Err(e))?; // graceful unwrap().
@@ -69,7 +79,10 @@ where
 }
 
 
-
+/// Processes the connection given in `stream` by reading and parsing it as an HTTP `Request` that
+/// then is passed to the user-provided HTTP `router` closure, which is expected to return a
+/// structured HTTP `Response` that finally is serialized and written back to `stream`.
+///
 fn handle_connection<F>(mut stream: TcpStream, config: Arc<ServerConfig>, router: Arc<F>)
 where
     F: Fn(&http::Request) -> Result<http::Response, Box<dyn Error>> + Send + 'static + Sync
@@ -103,6 +116,7 @@ where
 }
 
 
+/// Serializes the given `response` and writes it to `stream`.
 fn send_response(stream: &mut TcpStream, response: &http::res::TextResponse) {
 
     let raw_response = response.as_string();
@@ -114,3 +128,34 @@ fn send_response(stream: &mut TcpStream, response: &http::res::TextResponse) {
 }
 
 
+/// Helper function to set a handler for the TERM signal or equivalent
+/// (Ctrl-C). Returns a thread-safe boolean flag that changes its value
+/// to `false` when the signal is received; this flag can be passed as
+/// the `enabled` parameter for `run(...)` so that the server terminates
+/// gracefully.
+///
+pub fn set_ctrlc_finalizer(config: &ServerConfig) -> Arc<AtomicBool> {
+
+    // Will run the server until this value becomes `false`:
+    let is_server_enabled = Arc::new( AtomicBool::new(true) );
+    let enabled = Arc::clone(&is_server_enabled);
+
+    let self_address = format!("{}:{}", config.interface_address, config.port);
+
+    // Set handler for the TERM signal to shutdown the server:
+    ctrlc::set_handler(move ||
+    {
+        println!(" TERM signal (Ctrl-C) received, will shut server down ...");
+
+        // Flag the server as disabled:
+        enabled.store(false, Ordering::Release);
+
+        // Create a dummy connection to the server to ensure the socket gets unblocked:
+        let _ = TcpStream::connect(&self_address);
+    }
+    ).unwrap_or_else(|err| {
+        eprintln!("WARN: Failed to set handler for TERM signal (Ctrl-C): {err}");
+    });
+
+    is_server_enabled
+}

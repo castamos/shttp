@@ -227,6 +227,7 @@ pub mod res {
                     },
                 };
             } // loop
+            // The compiler knows this point is `unreachable!()`.
         } // fn
 
     } // impl
