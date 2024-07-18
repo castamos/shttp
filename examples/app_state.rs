@@ -5,12 +5,14 @@ use std::path::PathBuf;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 
-use clap::Parser;
+// For parsing command line:
+use clap::{Command, Args, FromArgMatches as _};
 
+// Our HTTP server:
 use shttp::{ServerConfig, http};
 
 /// Path for server html files, relative to the executable.
-const RESOURCE_DIR : &str = "../res";
+const RESOURCE_DIR : &str = "../../res";
 
 
 /// Fixed configuration for the web app.
@@ -49,7 +51,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     )?;
 
     // Build dynamic config from command-line and default values:
-    let mut config = ServerConfig::parse();
+    let app_command = ServerConfig::augment_args( Command::new("Example App") );
+    let mut config  = ServerConfig::from_arg_matches( &app_command.get_matches() )?;
 
     // Merge static and dynamic configuration:
     println!("Resource dir: {:?}", res_dir);
@@ -159,7 +162,7 @@ fn exe_relative_dir(rel_path: &Path) -> Result<PathBuf, Box<dyn Error>> {
 
     match abs_dir.is_dir() {
         true  => Ok(abs_dir),
-        false => Err( format!("Not a directory: {:?}", abs_dir).into() ),
+        false => Err( format!("Not a directory: {:?}", abs_dir) )?,
     }
 }
 

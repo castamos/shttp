@@ -7,11 +7,17 @@ use std::{
     io::prelude::*,
 };
 
-use clap::Parser;
+use clap::Args;
 use ctrlc;
 
 mod thread_pool;
 use crate::thread_pool::ThreadPool;
+
+pub type Request  = http::req::Request;
+pub type Response = http::res::Response;
+pub type Status   = http::res::Status;
+pub type Content  = http::res::Content;
+pub type Method   = http::req::Method;
 
 pub mod http; // (`pub` required to re-export the module to main.rs)
 
@@ -19,7 +25,7 @@ pub mod http; // (`pub` required to re-export the module to main.rs)
 // command-line parsing annotations. Doc-comments here are help strings.
 //
 /// A simple HTTP server
-#[derive(Parser, Debug)]
+#[derive(Args, Debug)]
 pub struct ServerConfig {
     /// TCP port in which the server will listen to HTTP requests
     #[arg(short, long, default_value_t=7878)]
