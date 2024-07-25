@@ -1,11 +1,11 @@
-use std::{
-    thread,
-    sync::{
-        mpsc,   // Multiple Producer Single Consumer channel
-        Arc,    // Atomic Reference Counter
-        Mutex,
-    }
+use std::thread;
+use std::sync::{
+    mpsc,   // Multiple Producer Single Consumer channel
+    Arc,    // Atomic Reference Counter
+    Mutex,
 };
+
+use log::{debug, trace};
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
@@ -53,7 +53,7 @@ impl Drop for ThreadPool {
         drop( self.sender.take() );
 
         for worker in &mut self.workers {
-            println!("Shutting down worker {} ...", worker.id);
+            debug!("Shutting down worker {} ...", worker.id);
             if let Some(thread) = worker.thread.take() {
                 thread.join().unwrap();
             }
@@ -74,12 +74,12 @@ impl Worker {
             let message = receiver.lock().unwrap().recv();
             match message {
                 Ok(job) => {
-                    println!("Worker {id} got a job; executing ...");
+                    trace!("Worker {id} got a job; executing ...");
                     job();
-                    println!("Worker {id} done executing job.");
+                    trace!("Worker {id} done executing job.");
                 },
                 Err(_) => {
-                    println!("Worker {id} exiting (sender closed).");
+                    trace!("Worker {id} exiting (sender closed).");
                     break;
                 }
             }

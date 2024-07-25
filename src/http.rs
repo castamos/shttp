@@ -1,4 +1,3 @@
-
 pub type Request = req::Request;
 pub type Response = res::Response;
 
@@ -112,7 +111,9 @@ pub mod req {
         }
 
         // No terminator matched:
-        Err( format!("Could not find header terminator in the first {HTTP_HEADER_MAX_LEN} bytes.").into())
+        Err( format!(
+            "Could not find header terminator in the first {HTTP_HEADER_MAX_LEN} bytes. Header: {buf_str}"
+        ).into())
     }
 }
 
@@ -122,6 +123,7 @@ pub mod res {
 
     use std::path::PathBuf;
     use std::fs;
+    use log::error;
 
     /// HTTP Response Status
     pub enum Status {
@@ -203,7 +205,7 @@ pub mod res {
                                 content: Text(file_text),
                             },
                             Err(e) => {
-                                println!("Failed to read '{:?}': {:?}", abs_path, e);
+                                error!("Failed to read '{:?}': {:?}", abs_path, e);
                                 Response {
                                     status: Status::InternalError,
                                     content: Text("Resource not available.".into()),
