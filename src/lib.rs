@@ -7,6 +7,7 @@ use std::{
     io::prelude::*,
 };
 
+use log::{info, warn, error, debug, trace};
 use clap::Args;
 use ctrlc;
 
@@ -60,7 +61,7 @@ where
 {
 
     let bind_address = format!("{}:{}", config.interface_address, config.port);
-    println!("Binding server to {bind_address}");
+    info!("Binding server to {bind_address}");
 
     let listener = TcpListener::bind(bind_address)?;
     let pool = ThreadPool::new(config.threads);
@@ -79,7 +80,7 @@ where
         });
     }
 
-    println!("Server closed, not more connections will be accepted.");
+    info!("Server closed, not more connections will be accepted.");
 
     Ok(()) // Everything was OK.
 }
@@ -96,12 +97,13 @@ where
     let text_response = match http::Request::parse_from_stream(&mut stream)
     {
         Ok(request) => {
-            println!("Request header: {:?}", request);
+            info!("Got request: {:?}", request.method);
+            debug!("Request header: {:?}", request);
             match router(&request)
             {
                 Ok(response) => response.into_text_response(&config.resource_dir),
                 Err(error) => {
-                    println!("Router failed to process request: {error}");
+                    error!("Router failed to process request: {error}");
                     http::res::TextResponse {
                         status: http::res::Status::InternalError,
                         body: "Failed to process resquest".into(),
@@ -110,7 +112,7 @@ where
             }
         },
         Err(error) => {
-            println!("Bad request: {error}");
+            error!("Bad request: {error}");
             http::res::TextResponse {
                 status: http::res::Status::BadRequest,
                 body: "Bad request".into(),
@@ -127,9 +129,9 @@ fn send_response(stream: &mut TcpStream, response: &http::res::TextResponse) {
 
     let raw_response = response.as_string();
 
-    println!("Response: {:#?}", raw_response);
+    trace!("Response: {:#?}", raw_response);
     stream.write_all(raw_response.as_bytes()).unwrap_or_else(|error| {
-        println!("ERROR: Failed to write response: {:?}", error);
+        error!("Failed to write response: {:?}", error);
     });
 }
 
@@ -151,7 +153,7 @@ pub fn set_ctrlc_finalizer(config: &ServerConfig) -> Arc<AtomicBool> {
     // Set handler for the TERM signal to shutdown the server:
     ctrlc::set_handler(move ||
     {
-        println!(" TERM signal (Ctrl-C) received, will shut server down ...");
+        info!(" TERM signal (Ctrl-C) received, will shut server down ...");
 
         // Flag the server as disabled:
         enabled.store(false, Ordering::Release);
@@ -160,7 +162,7 @@ pub fn set_ctrlc_finalizer(config: &ServerConfig) -> Arc<AtomicBool> {
         let _ = TcpStream::connect(&self_address);
     }
     ).unwrap_or_else(|err| {
-        eprintln!("WARN: Failed to set handler for TERM signal (Ctrl-C): {err}");
+        warn!("WARN: Failed to set handler for TERM signal (Ctrl-C): {err}");
     });
 
     is_server_enabled

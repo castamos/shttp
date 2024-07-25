@@ -3,8 +3,11 @@
 // Standard modules
 use std::error::Error;
 use std::process;
+use std::env;
 
 // crates.io modules
+use env_logger;
+use log::{error, debug};
 use clap::{Parser, Args, CommandFactory, FromArgMatches as _};
 
 // The module this example is for
@@ -15,12 +18,12 @@ use shttp::{ServerConfig, Request, Response, Status, Content, Method};
 mod man_reader;
 use man_reader::*;
 
+/// Default log level if not given in the environment
+const DEFAULT_LOG_LEVEL : &str = "info";
+
 /// A man page web browser
 #[derive(Parser, Debug)]
 struct AppConfig {
-    /// Whether to X
-    #[arg(short, long)]
-    whether: bool,
 
     /// Formatter for rendering man pages as HTML
     #[arg(value_enum, default_value_t=man_reader::Reader::Man, short, long)]
@@ -30,8 +33,16 @@ struct AppConfig {
 
 /// Entry point.
 fn main() {
+
+    // Configure logging
+    if let Ok(_) = env::var("RUST_LOG") {} else {
+        // Set default log level if not given in the environment.
+        env::set_var("RUST_LOG", DEFAULT_LOG_LEVEL);
+    }
+    env_logger::init();
+
     if let Err(e) = run() {
-        eprintln!("{:?}", e);
+        error!("{:?}", e);
         process::exit(1);
     }
     else {
@@ -52,8 +63,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     let srv_config = ServerConfig::from_arg_matches(&matches)?;
     let app_config = AppConfig::from_arg_matches(&matches)?;
      
-    println!("App: {:?}", app_config);
-    println!("Srv: {:?}", srv_config);
+    debug!("App: {:?}", app_config);
+    debug!("Srv: {:?}", srv_config);
 
     let enabled = shttp::set_ctrlc_finalizer(&srv_config);
     shttp::run(enabled, srv_config, router)?;
@@ -71,7 +82,7 @@ fn router(req: &Request) -> Result<Response, Box<dyn Error>> {
 
         Err(e) => {
             let msg = format!("Failed to execute `man` command: {:?}", e);
-            println!("{}", msg);
+            error!("{}", msg);
 
             Ok(Response {
                 status:  Status::InternalError,

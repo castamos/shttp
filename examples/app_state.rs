@@ -7,12 +7,17 @@ use std::sync::{Arc, RwLock};
 
 // For parsing command line:
 use clap::{Command, Args, FromArgMatches as _};
+// Logging:
+use log::{error, info};
+use env_logger;
 
 // Our HTTP server:
 use shttp::{ServerConfig, http};
 
-/// Path for server html files, relative to the executable.
+/// Path for server html files, relative to the executable
 const RESOURCE_DIR : &str = "../../res";
+/// Default log level if not given in the environment
+const DEFAULT_LOG_LEVEL : &str = "info";
 
 
 /// Fixed configuration for the web app.
@@ -31,9 +36,16 @@ struct AppState {
 /// Entry point
 fn main() {
 
+    // Configure logging
+    if let Ok(_) = env::var("RUST_LOG") {} else {
+        // Set default log level if not given in the environment.
+        env::set_var("RUST_LOG", DEFAULT_LOG_LEVEL);
+    }
+    env_logger::init();
+
     // Run the server and handle fatal errors
     if let Err(e) = run() {
-        eprintln!("{:?}", e);
+        error!("{:?}", e);
         process::exit(1);
     }
     else {
@@ -55,7 +67,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut config  = ServerConfig::from_arg_matches( &app_command.get_matches() )?;
 
     // Merge static and dynamic configuration:
-    println!("Resource dir: {:?}", res_dir);
+    info!("Resource dir: {:?}", res_dir);
     config.resource_dir = res_dir;
     
     // Initialize application-specific fixed configuration:
@@ -101,7 +113,7 @@ fn process_request(
     // Update app state
     let mut req_cnt = app_state.read().unwrap().req_cnt;
     req_cnt += 1;
-    println!("Request #{req_cnt}");
+    info!("Request #{req_cnt}");
     app_state.write().unwrap().req_cnt = req_cnt;
 
     // Resolve route:
@@ -134,7 +146,7 @@ fn process_request(
             thread::sleep(Duration::from_secs(5));
             Response {
                 status: Status::OK,
-                content: UserFile("hello.html".into()),
+                content: ServerFile("hello.html".into()),
             }
         },
 
