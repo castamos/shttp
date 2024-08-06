@@ -21,7 +21,7 @@ const DEFAULT_LOG_LEVEL : &str = "info";
 
 
 /// Fixed configuration for the web app.
-struct AppConfig<'a> {
+struct AppInfo<'a> {
     name: &'a str,
     version: &'a str,
 }
@@ -37,7 +37,7 @@ struct AppState {
 fn main() {
 
     // Configure logging
-    if let Ok(_) = env::var("RUST_LOG") {} else {
+    if env::var("RUST_LOG").is_err() {
         // Set default log level if not given in the environment.
         env::set_var("RUST_LOG", DEFAULT_LOG_LEVEL);
     }
@@ -71,7 +71,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     config.resource_dir = res_dir;
     
     // Initialize application-specific fixed configuration:
-    let app_config = AppConfig {
+    let app_config = AppInfo {
         name: "My Web App",
         version: "0.1",
     };
@@ -96,7 +96,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 /// The HTTP endpoint router. This is called from each request the server receives
 /// and may be called from different threads each time.
 fn process_request(
-    header: &http::Request, app_config: &AppConfig, app_state: Arc<RwLock<AppState>>)
+    header: &http::Request, app_config: &AppInfo, app_state: Arc<RwLock<AppState>>)
     -> Result<http::Response, Box<dyn Error>>
 {
     use shttp::http:: {
