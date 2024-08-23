@@ -1,10 +1,9 @@
 use std::{
     error::Error,
-    sync::Arc,
-    sync::atomic::{AtomicBool, Ordering},
+    io::prelude::*,
     net::{TcpListener, TcpStream},
     path::PathBuf,
-    io::prelude::*,
+    sync::{atomic::{AtomicBool, Ordering}, Arc}
 };
 
 use log::{info, warn, error, debug, trace};
@@ -14,13 +13,15 @@ use ctrlc;
 mod thread_pool;
 use crate::thread_pool::ThreadPool;
 
+mod uri; // Used inside module http
+
+pub mod http; // `pub` to re-export as part of the library interface
 pub type Request  = http::req::Request;
 pub type Response = http::res::Response;
 pub type Status   = http::res::Status;
 pub type Content  = http::res::Content;
 pub type Method   = http::req::Method;
 
-pub mod http; // (`pub` required to re-export the module to main.rs)
 
 // `ServerConfig` is the application configuration definition with embeded
 // command-line parsing annotations. Doc-comments here are help strings.
