@@ -1,3 +1,4 @@
+
 pub type Request = req::Request;
 pub type Response = res::Response;
 
@@ -8,6 +9,7 @@ pub mod req {
     use std::net::TcpStream;
     use std::io::prelude::*;
     use std::collections::HashMap;
+    use crate::uri;
 
     const HTTP_HEADER_MAX_LEN : usize = 1024 * 1;
 
@@ -30,6 +32,8 @@ pub mod req {
 
     impl Request {
 
+        /// Parses an HTTP header given as a raw string and returns the corresponding
+        /// `Request` object.
         pub fn parse(header: &str) -> Result<Request, Box<dyn Error>> {
 
             let mut warnings: Vec<String> = vec![];
@@ -41,18 +45,24 @@ pub mod req {
                 // First line has the URI request
                 let fields: Vec<_> = request.split_ascii_whitespace().collect();
 
-                let [method_field, uri, http_version] = fields[..] else {
-                    return Err("Missing fields in URI in header.".into());
+                let [method_field, raw_uri, http_version] = fields[..] else {
+                    return Err("Missing fields in URI in header.")?;
                 };
 
                 if http_version != "HTTP/1.1" {
                     warnings.push(format!("Unknown HTTP version {}", http_version));
                 }
 
+                let Ok(uri) = uri::decode_uri(raw_uri) else {
+                    return Err("Encoded URL does not represent valid UTF-8: {raw_uri}")?;
+                };
+
                 match method_field.to_ascii_uppercase().as_str() {
-                    "GET" => Method::Get(uri.into()),
-                    "PUT" => Method::Put(uri.into()),
-                    _ => return Err(format!("Unknown HTTP method: {}", method_field).into()),
+                    "GET" => Method::Get(uri),
+                    "PUT" => Method::Put(uri),
+                    _ => return Err(
+                        format!("Unknown HTTP method: {}", method_field).into()
+                    ),
                 }
             }
             else {
@@ -70,7 +80,9 @@ pub mod req {
                     headers.insert(name.trim().into(), value.trim().into());
                 }
                 else {
-                    warnings.push(format!("Invalid header line, missing colon separator in: '{line}'"));
+                    warnings.push(format!(
+                        "Invalid header line, missing colon separator in: '{line}'"
+                    ));
                 }
             }
 
@@ -78,11 +90,14 @@ pub mod req {
         }
 
 
-        pub fn parse_from_stream(stream: &mut TcpStream) -> Result<Request, Box<dyn Error>> {
+        pub fn parse_from_stream(stream: &mut TcpStream) ->
+            Result<Request, Box<dyn Error>>
+        {
             let request_header = retrieve_header(stream)?;
             Request::parse(&request_header[..])
         }
-    }
+
+    } // impl Request
 
 
     fn retrieve_header(stream: &mut TcpStream) -> Result<String, Box<dyn Error>> {
@@ -112,10 +127,12 @@ pub mod req {
 
         // No terminator matched:
         Err( format!(
-            "Could not find header terminator in the first {HTTP_HEADER_MAX_LEN} bytes. Header: {buf_str}"
+            "Could not find header terminator in the first {HTTP_HEADER_MAX_LEN} \
+             bytes. Header: {buf_str}"
         ).into())
     }
-}
+
+} // mod Request
 
 
 /// HTTP Response

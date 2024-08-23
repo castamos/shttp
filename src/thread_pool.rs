@@ -36,6 +36,7 @@ impl ThreadPool {
         ThreadPool { workers, sender: Some(sender) }
     }
 
+    /// Executes the given job `f` in the pool's next available thread.
     pub fn execute<F>(&self, f: F)
     where
         F: FnOnce() + Send + 'static,
